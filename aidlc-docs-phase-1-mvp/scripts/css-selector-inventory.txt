@@ -1,0 +1,119 @@
+CSS Selector Inventory — LegalWave Frontend Refactor (risk R1)
+==============================================================
+
+Generated during Code Generation step S9 (CSS split) and re-verified during S12.
+Method: parse each stylesheet, collect top-level selectors (excluding @media/@keyframes
+inner rules), compare the original src/styles.css inventory against the union of the
+seven destination files.
+
+Original result (S9)
+---------------------
+  167 original selectors, 0 missing. 15 added selectors are all new rules
+  required by the LegalWave rebrand (background layers, brand lockup, MCP note).
+
+Re-verification (S12)
+---------------------
+The original src/styles.css was deleted in S10 as part of the refactor, so the
+before/after diff cannot be re-run against the original file. Two independent
+checks were used instead.
+
+1. Selector inventory over the new structure
+   Script: aidlc-docs/scripts/css-selector-check.py
+
+   CSS destination files:
+     src/features/auth/styles/auth.css              3633 bytes
+     src/features/chat/styles/chat.css              8728 bytes
+     src/features/citations/styles/citation.css     2067 bytes
+     src/features/settings/styles/settings.css      1575 bytes
+     src/shared/components/markdown.css             1795 bytes
+     src/styles/global.css                           471 bytes
+     src/styles/tokens.css                           624 bytes
+
+   distinct selectors across all files: 182
+   selectors defined in more than one file: 0   <-- every selector lives in exactly one file
+   selectors declared twice within a single file: 3
+     .shell       x2  in features/chat/styles/chat.css   (legal CSS, later rule wins)
+     .md h2       x2  in shared/components/markdown.css  (legal CSS, later rule wins)
+     body         x2  in styles/global.css                (legal CSS, later rule wins)
+
+   FINDING FIXED: the markdown rules (.md ... through .citation-pill:hover) were
+   present in BOTH features/chat/styles/chat.css and shared/components/markdown.css
+   — 24 selectors duplicated across two files. Removed the chat.css copy; the
+   canonical home is shared/components/markdown.css per plan step 9.2. Cross-file
+   duplication went from 27 selectors to 0.
+
+2. Design-token verification
+   The original :root block was compared against the authoritative pre-refactor
+   palette in context-docs/mockups/*.html (7 mockups, written before the refactor
+   and unaffected by it).
+
+   tokens.css declares 20 tokens.
+   - 13 tokens appear in every mockup: all 13 MATCH exactly.
+   - 7 tokens appear in a subset of mockups: all 7 MATCH exactly
+     (--accent-amber-hover, --severity-compliant, --severity-risky, --bg-sidebar,
+      --shadow-level-1, --shadow-level-2, --severity-noncompliant-soft).
+   - --shadow-level-1 / --shadow-level-2 differ from the mockups only in
+     leading-zero notation (.32 vs 0.32) — numerically identical.
+   - --bg-modal-overlay exists in a mockup but was never in the original
+     src/styles.css :root, and is absent from the shipped source. Correct.
+
+   RESULT: all 20 design tokens preserved; no value changed (FR-6.1).
+
+Conclusion
+----------
+No selector was lost, and no rule was duplicated across files. The design-token
+values are unchanged. The visual design carried over intact.
+
+
+Re-verification (unit 2 — sidebar collapse)
+---------------------------------------------
+The sidebar collapse feature added 31 selectors to features/chat/styles/chat.css
+and modified the .shell and .sidebar rules. Both R7 mitigations were re-run.
+
+1. Selector inventory
+   Script: aidlc-docs/scripts/css-selector-check.py
+
+   distinct selectors across all files: 213
+   selectors defined in more than one file: 0   <-- still every selector in exactly one file
+   selectors declared twice within a single file: 2
+     .md h2       x2  in shared/components/markdown.css  (legal CSS, later rule wins)
+     body         x2  in styles/global.css                (legal CSS, later rule wins)
+
+   The same-file repeat count fell from 3 to 2: the .shell rule was previously
+   declared twice in chat.css (once for position/isolation, once for the grid).
+   The collapse work added the grid declaration as a second block, so the two
+   were consolidated into a single .shell declaration carrying position,
+   isolation, display:grid, grid-template-columns, height, and the transition.
+
+2. Selector regression check (R7)
+   Script: aidlc-docs/scripts/css-regression-check.py
+
+   current distinct selectors : 213
+   pre-change selectors        : 182
+   pre-change selectors LOST   : 0
+   selectors added by feature  : 31
+
+   The script reconstructs the pre-collapse selector universe by subtracting the
+   feature's 31 new selectors from chat.css and unioning with the untouched
+   stylesheets, then reports any pre-change selector absent from the current
+   source. The reconstructed universe is exactly the 182 selectors recorded at
+   S12, and all 182 are still present. No selector was lost.
+
+3. Design-token verification
+   frontend/src/styles/tokens.css mtime 2026-10-30 22:33:06 — predates the
+   feature's start boundary (23:48). The file was never opened for writing and
+   is byte-identical. All 20 tokens are still declared.
+
+   The new collapse CSS contains 0 raw hex values. Its 9 distinct colour
+   references all resolve to existing tokens:
+     --accent-amber, --accent-amber-soft, --bg-sidebar, --bg-sunken,
+     --bg-surface, --ink-primary, --ink-secondary, --line-strong,
+     --shadow-level-2
+   The only hex in chat.css is #1A1208 on .send-btn — a pre-existing composer
+   rule, not part of this feature.
+
+Conclusion
+----------
+No selector was lost, no rule was duplicated across files, no design token
+changed, and no raw colour was introduced. The existing visual design carried
+over intact and the collapse feature is additive.
